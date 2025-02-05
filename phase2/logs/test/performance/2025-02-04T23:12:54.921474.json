@@ -1,0 +1,11 @@
+{
+    "timestamp": "2025-02-04T23:12:54.921474",
+    "level": "system",
+    "metrics": {
+        "tests_run": 1,
+        "tests_failed": 0,
+        "tests_errors": 1,
+        "duration": 0.000202
+    },
+    "step": null
+}

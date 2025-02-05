@@ -1,0 +1,37 @@
+# 测试配置
+
+# 基础配置
+input_size: 64
+hidden_size: 128
+num_layers: 1
+dropout: 0.1
+learning_rate: 0.01
+batch_size: 8
+max_epochs: 10
+attention_heads: 2
+
+# 资源管理配置
+resource_thresholds:
+  min_allocation: 0.2
+  max_allocation: 0.6
+  balance_factor: 0.5
+
+# 状态控制配置
+state_transition_params:
+  learning_rate: 0.2
+  momentum: 0.8
+  stability_threshold: 0.3
+
+# 反馈系统配置
+feedback_thresholds:
+  performance_drop: 0.3
+  efficiency_min: 0.4
+  plasticity_min: 0.3
+  confidence_min: 0.5
+
+# 测试参数
+test_params:
+  num_test_cases: 100
+  performance_threshold: 0.8
+  max_test_time: 300  # 秒
+  error_tolerance: 0.1 

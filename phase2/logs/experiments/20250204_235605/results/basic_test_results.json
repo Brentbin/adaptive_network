@@ -1,0 +1,6 @@
+{
+    "fast_intuition": {
+        "mse": 0.9697055220603943,
+        "accuracy": 0.095703125,
+        "state": {
+            "active_levels": 

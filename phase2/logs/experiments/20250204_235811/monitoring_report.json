@@ -1,0 +1,48 @@
+{
+    "timestamp": "2025-02-04T23:58:13.277304",
+    "performance_summary": {
+        "mse": {
+            "mean": 0.6271145880222321,
+            "std": 0.4214602775296298,
+            "min": 0.18908900022506714,
+            "max": 1.1854246854782104,
+            "trend": -0.18279001116752625
+        },
+        "accuracy": {
+            "mean": 0.12734375,
+            "std": 0.042869202869746714,
+            "min": 0.0703125,
+            "max": 0.189453125,
+            "trend": -0.001953125
+        }
+    },
+    "resource_usage_summary": {
+        "computation": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+        },
+        "memory": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+        },
+        "attention": {
+            "mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0
+        }
+    },
+    "state_changes_summary": {
+        "depth": {
+            "mean": 0.675,
+            "std": 0.2968585521759479,
+            "stability": 0.7031414478240521,
+            "trend": -0.5
+        }
+    },
+    "error_summary": {}
+}

@@ -1,0 +1,29 @@
+# 系统默认配置
+
+# 基础配置
+input_size: 256
+hidden_size: 512
+num_layers: 2
+dropout: 0.1
+learning_rate: 0.001
+batch_size: 32
+max_epochs: 100
+
+# 资源管理配置
+resource_thresholds:
+  min_allocation: 0.1
+  max_allocation: 0.8
+  balance_factor: 0.5
+
+# 状态控制配置
+state_transition_params:
+  learning_rate: 0.1
+  momentum: 0.9
+  stability_threshold: 0.2
+
+# 反馈系统配置
+feedback_thresholds:
+  performance_drop: 0.2
+  efficiency_min: 0.3
+  plasticity_min: 0.2
+  confidence_min: 0.4 
