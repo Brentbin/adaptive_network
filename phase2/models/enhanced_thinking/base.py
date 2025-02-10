@@ -7,12 +7,15 @@ import torch
 
 @dataclass
 class ThinkingState:
-    """Represents the state of thinking process."""
-    level: int
-    confidence: float
-    attention_weights: Optional[torch.Tensor] = None
-    memory_context: Optional[Dict[str, Any]] = None
-    configuration: Optional[str] = None
+    """思维状态"""
+    level: int                                  # 层级ID
+    confidence: float                           # 置信度
+    attention_weights: Optional[torch.Tensor]   # 注意力权重
+    memory_context: Optional[Dict[str, Any]]    # 记忆上下文
+    configuration: Any                          # 当前配置
+    resource_usage: float = 0.0                 # 资源使用率
+    processing_time: float = 0.0               # 处理时间
+    output_norm: float = 0.0                   # 输出范数
 
 @dataclass
 class ThinkingResult:

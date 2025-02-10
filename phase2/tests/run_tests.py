@@ -1,89 +1,159 @@
 """测试运行脚本
 
-运行系统的基础测试和性能测试。
+运行所有测试并显示结果。
 """
 
 import os
-import unittest
-import torch
+import json
+from typing import Dict, List, Any
+import argparse
 from datetime import datetime
+import torch
 
-from models.enhanced_thinking import (
-    ThinkingSystem,
-    ConfigManager,
-    SystemLogger,
-    SystemMonitor
-)
+from .test_runner import TestRunner
+from ..models.enhanced_thinking.config_manager import SystemConfig
 
-def run_basic_tests():
-    """运行基础测试"""
-    # 设置测试环境
-    test_dir = os.path.dirname(os.path.abspath(__file__))
-    project_dir = os.path.dirname(test_dir)
+def setup_args() -> argparse.Namespace:
+    """设置命令行参数"""
+    parser = argparse.ArgumentParser(description='Run system tests')
     
-    # 创建日志目录
-    log_dir = os.path.join(project_dir, 'logs', 'test')
-    os.makedirs(log_dir, exist_ok=True)
-    
-    # 初始化组件
-    config_manager = ConfigManager(
-        os.path.join(project_dir, 'configs', 'test_config.yaml')
-    )
-    logger = SystemLogger(log_dir)
-    monitor = SystemMonitor(
-        logger,
-        os.path.join(log_dir, 'monitor')
+    parser.add_argument(
+        '--output-dir',
+        type=str,
+        default='test_results',
+        help='Directory to save test results'
     )
     
-    # 创建系统
-    system = ThinkingSystem(config_manager.get_config())
-    
-    # 运行测试
-    test_loader = unittest.TestLoader()
-    test_suite = test_loader.discover(test_dir)
-    
-    # 记录开始时间
-    start_time = datetime.now()
-    
-    # 运行测试并生成报告
-    runner = unittest.TextTestRunner(verbosity=2)
-    test_results = runner.run(test_suite)
-    
-    # 记录结束时间
-    end_time = datetime.now()
-    duration = (end_time - start_time).total_seconds()
-    
-    # 记录测试结果
-    logger.log_performance(
-        'system',
-        {
-            'tests_run': test_results.testsRun,
-            'tests_failed': len(test_results.failures),
-            'tests_errors': len(test_results.errors),
-            'duration': duration
-        }
+    parser.add_argument(
+        '--config-file',
+        type=str,
+        help='Path to system configuration file'
     )
     
-    # 生成监控报告
-    monitor.generate_monitoring_report(
-        os.path.join(log_dir, 'test_report.json')
+    parser.add_argument(
+        '--num-cases',
+        type=int,
+        default=100,
+        help='Number of test cases per suite'
     )
     
-    return test_results
+    parser.add_argument(
+        '--seed',
+        type=int,
+        default=None,
+        help='Random seed for reproducibility'
+    )
+    
+    return parser.parse_args()
 
-if __name__ == '__main__':
+def load_config(config_file: str) -> SystemConfig:
+    """加载系统配置
+    
+    Args:
+        config_file: 配置文件路径
+        
+    Returns:
+        系统配置
+    """
+    if not os.path.exists(config_file):
+        print(f"Config file not found: {config_file}")
+        print("Using default configuration")
+        return SystemConfig(
+            input_size=256,
+            hidden_size=512
+        )
+        
+    with open(config_file, 'r') as f:
+        config_dict = json.load(f)
+        
+    return SystemConfig.from_dict(config_dict)
+
+def print_results(results: List[Dict[str, Any]]) -> None:
+    """打印测试结果
+    
+    Args:
+        results: 测试结果列表
+    """
+    print("\n=== Test Results ===")
+    
+    for suite_result in results:
+        print(f"\nTest Suite: {suite_result['suite_name']}")
+        print(f"Timestamp: {suite_result['timestamp']}")
+        print(f"Total Time: {suite_result['total_time']:.2f}s")
+        print(f"Number of Tests: {suite_result['num_tests']}")
+        print(f"Overall Score: {suite_result['overall_score']:.3f}")
+        print(f"Performance Grade: {suite_result['performance_grade']}")
+        
+        print("\nAverage Metrics:")
+        for metric, value in suite_result['average_metrics'].items():
+            print(f"- {metric}: {value:.3f}")
+            
+        print("\nStandard Deviations:")
+        for metric, value in suite_result['std_metrics'].items():
+            print(f"- {metric}: {value:.3f}")
+            
+        print("\nLevel Statistics:")
+        for level, stats in suite_result['level_statistics'].items():
+            print(f"\n{level}:")
+            for metric, value in stats.items():
+                print(f"- {metric}: {value:.3f}")
+                
+def save_summary(results: List[Dict[str, Any]], output_dir: str) -> None:
+    """保存测试总结
+    
+    Args:
+        results: 测试结果列表
+        output_dir: 输出目录
+    """
+    summary = {
+        'timestamp': datetime.now().isoformat(),
+        'num_suites': len(results),
+        'total_cases': sum(r['num_tests'] for r in results),
+        'total_time': sum(r['total_time'] for r in results),
+        'suite_results': results
+    }
+    
+    # 计算总体统计
+    all_scores = [r['overall_score'] for r in results]
+    summary['overall_stats'] = {
+        'min_score': min(all_scores),
+        'max_score': max(all_scores),
+        'avg_score': sum(all_scores) / len(all_scores)
+    }
+    
+    # 保存总结
+    summary_file = os.path.join(output_dir, 'test_summary.json')
+    with open(summary_file, 'w') as f:
+        json.dump(summary, f, indent=2)
+        
+def main() -> None:
+    """主函数"""
+    # 解析参数
+    args = setup_args()
+    
     # 设置随机种子
-    torch.manual_seed(42)
+    if args.seed is not None:
+        torch.manual_seed(args.seed)
+        
+    # 加载配置
+    config = load_config(args.config_file) if args.config_file else None
+    
+    # 创建测试运行器
+    runner = TestRunner(
+        output_dir=args.output_dir,
+        save_results=True
+    )
     
     # 运行测试
-    results = run_basic_tests()
+    print("Starting tests...")
+    results = runner.run_all_tests()
     
-    # 输出总结
-    print("\n测试总结:")
-    print(f"运行测试: {results.testsRun}")
-    print(f"失败: {len(results.failures)}")
-    print(f"错误: {len(results.errors)}")
+    # 打印结果
+    print_results(results)
     
-    # 设置退出码
-    exit_code = 0 if results.wasSuccessful() else 1
-    exit(exit_code) 
+    # 保存总结
+    save_summary(results, args.output_dir)
+    print(f"\nTest summary saved to {args.output_dir}/test_summary.json")
+    
+if __name__ == '__main__':
+    main() 

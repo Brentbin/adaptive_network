@@ -25,10 +25,11 @@ TODO:
 
 import torch
 import torch.nn as nn
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, List
 from dataclasses import dataclass
 import numpy as np
 import time
+import sys
 
 from .base import ThinkingLevel, ThinkingState
 from .config_states import ConfigStateManager
@@ -394,67 +395,541 @@ class StateController:
 class FeedbackSystem:
     """反馈系统
     
-    TODO:
-    1. 实现多维度反馈收集
-    2. 实现反馈分析机制
-    3. 添加反馈响应策略
-    4. 实现反馈历史记录
+    实现完整的反馈收集、分析和响应机制，包括：
+    1. 多维度反馈收集
+    2. 反馈分析机制
+    3. 反馈响应策略
+    4. 反馈历史记录
     """
     def __init__(self):
-        self.feedback_history = []
-        self.performance_metrics = {}
+        # 反馈历史记录
+        self.feedback_history = {
+            'performance': [],      # 性能指标历史
+            'resource_usage': [],   # 资源使用历史
+            'state_stability': [],  # 状态稳定性历史
+            'coordination': []      # 层级协同效果历史
+        }
         
-    def collect_feedback(self,
-                        performance: float,
-                        resource_usage: Dict[str, float]) -> Dict[str, float]:
-        """收集反馈
+        # 性能指标
+        self.performance_metrics = {
+            'accuracy': [],         # 准确性历史
+            'efficiency': [],       # 效率历史
+            'adaptability': [],     # 适应性历史
+            'stability': []         # 稳定性历史
+        }
+        
+        # 分析窗口大小
+        self.analysis_windows = {
+            'short_term': 5,        # 短期趋势窗口
+            'medium_term': 20,      # 中期趋势窗口
+            'long_term': 50         # 长期趋势窗口
+        }
+        
+        # 异常检测阈值
+        self.anomaly_thresholds = {
+            'performance_drop': 0.3,    # 性能下降阈值
+            'resource_spike': 0.8,      # 资源使用峰值阈值
+            'stability_loss': 0.4       # 稳定性损失阈值
+        }
+        
+    def collect_feedback(self, 
+                        feedback_data: Dict[str, Any],
+                        context: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
+        """收集多维度反馈数据
         
         Args:
-            performance: 性能评分
+            feedback_data: 包含各维度反馈的字典
+            context: 可选的上下文信息
+            
+        Returns:
+            处理后的反馈数据
+        """
+        # 1. 提取基础指标
+        performance = feedback_data.get('performance', 0.0)
+        resource_usage = feedback_data.get('resource_usage', {})
+        state_info = feedback_data.get('state_info', {})
+        
+        # 2. 计算复合指标
+        processed_feedback = {
+            'performance': performance,
+            'resource_efficiency': self._calculate_resource_efficiency(
+                performance, 
+                resource_usage
+            ),
+            'state_stability': self._calculate_stability(state_info),
+            'coordination_score': self._evaluate_coordination(
+                feedback_data.get('coordination_info', {})
+            )
+        }
+        
+        # 3. 更新历史记录
+        for key, value in processed_feedback.items():
+            if key in self.feedback_history:
+                self.feedback_history[key].append(value)
+                # 维护历史长度
+                if len(self.feedback_history[key]) > self.analysis_windows['long_term']:
+                    self.feedback_history[key] = self.feedback_history[key][-self.analysis_windows['long_term']:]
+        
+        # 4. 更新性能指标
+        self._update_performance_metrics(processed_feedback)
+        
+        return processed_feedback
+        
+    def analyze_feedback(self) -> Dict[str, Any]:
+        """分析反馈数据，生成综合分析报告
+        
+        Returns:
+            分析结果报告
+        """
+        analysis_report = {
+            'trends': self._analyze_trends(),
+            'anomalies': self._detect_anomalies(),
+            'bottlenecks': self._identify_bottlenecks(),
+            'suggestions': self._generate_suggestions()
+        }
+        
+        return analysis_report
+    
+    def generate_response(self, 
+                         analysis: Dict[str, Any],
+                         context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """根据分析结果生成响应策略
+        
+        Args:
+            analysis: 分析报告
+            context: 可选的上下文信息
+            
+        Returns:
+            响应策略
+        """
+        response = {
+            'resource_adjustments': self._generate_resource_adjustments(
+                analysis['bottlenecks']
+            ),
+            'state_transitions': self._generate_state_transitions(
+                analysis['trends']
+            ),
+            'optimization_directives': self._generate_optimization_directives(
+                analysis
+            ),
+            'architecture_adjustments': self._generate_architecture_adjustments(
+                analysis['anomalies']
+            )
+        }
+        
+        return response
+    
+    def _calculate_resource_efficiency(self,
+                                    performance: float,
+                                    resource_usage: Dict[str, float]) -> float:
+        """计算资源使用效率
+        
+        Args:
+            performance: 性能指标
             resource_usage: 资源使用情况
             
         Returns:
-            处理后的反馈
+            资源效率得分
         """
-        feedback = {
-            'performance': performance,
-            'resource_usage': resource_usage
-        }
-        
-        self.feedback_history.append(feedback)
-        if len(self.feedback_history) > 50:
-            self.feedback_history = self.feedback_history[-50:]
+        if not resource_usage:
+            return 0.0
             
-        return feedback
-        
-    def analyze_feedback(self,
-                        feedback: Dict[str, float]) -> Dict[str, Any]:
-        """分析反馈
+        total_usage = sum(resource_usage.values())
+        if total_usage == 0:
+            return 0.0
+            
+        return performance / total_usage
+    
+    def _calculate_stability(self, state_info: Dict[str, Any]) -> float:
+        """计算系统稳定性
         
         Args:
-            feedback: 反馈信息
+            state_info: 状态信息
             
         Returns:
-            分析结果
+            稳定性得分
         """
-        # 分析性能趋势
-        if len(self.feedback_history) >= 3:
-            recent_perf = [f['performance'] for f in self.feedback_history[-3:]]
-            trend = sum(b - a for a, b in zip(recent_perf[:-1], recent_perf[1:]))
-        else:
-            trend = 0
+        if not state_info:
+            return 1.0
             
-        # 分析资源使用
-        resource_usage = feedback['resource_usage']
-        total_usage = sum(resource_usage.values())
+        # 计算状态变化幅度
+        state_changes = state_info.get('changes', [])
+        if not state_changes:
+            return 1.0
+            
+        # 使用最近的状态变化计算稳定性
+        recent_changes = state_changes[-self.analysis_windows['short_term']:]
+        avg_change = sum(recent_changes) / len(recent_changes)
         
-        return {
-            'performance_trend': trend,
-            'total_resource_usage': total_usage,
-            'resource_distribution': resource_usage
+        # 将变化幅度映射到稳定性分数
+        return max(0.0, 1.0 - avg_change)
+    
+    def _evaluate_coordination(self, coordination_info: Dict[str, Any]) -> float:
+        """评估层级间的协同效果
+        
+        Args:
+            coordination_info: 协同相关信息
+            
+        Returns:
+            协同效果得分
+        """
+        if not coordination_info:
+            return 0.5
+            
+        # 评估各个协同指标
+        message_efficiency = coordination_info.get('message_efficiency', 0.5)
+        resource_sharing = coordination_info.get('resource_sharing', 0.5)
+        conflict_rate = coordination_info.get('conflict_rate', 0.5)
+        
+        # 综合评分
+        return (message_efficiency + resource_sharing + (1 - conflict_rate)) / 3
+    
+    def _update_performance_metrics(self, feedback: Dict[str, float]) -> None:
+        """更新性能指标
+        
+        Args:
+            feedback: 处理后的反馈数据
+        """
+        # 更新准确性
+        self.performance_metrics['accuracy'].append(
+            feedback['performance']
+        )
+        
+        # 更新效率
+        self.performance_metrics['efficiency'].append(
+            feedback['resource_efficiency']
+        )
+        
+        # 更新适应性 (基于性能变化趋势)
+        if len(self.performance_metrics['accuracy']) >= 2:
+            perf_change = self.performance_metrics['accuracy'][-1] - \
+                         self.performance_metrics['accuracy'][-2]
+            adaptability = 1.0 / (1.0 + np.abs(perf_change))  # 映射到[0,1]
+            self.performance_metrics['adaptability'].append(adaptability)
+        else:
+            self.performance_metrics['adaptability'].append(0.5)
+        
+        # 更新稳定性
+        self.performance_metrics['stability'].append(
+            feedback['state_stability']
+        )
+        
+        # 维护历史长度
+        for metric_list in self.performance_metrics.values():
+            if len(metric_list) > self.analysis_windows['long_term']:
+                metric_list.pop(0)
+    
+    def _analyze_trends(self) -> Dict[str, Any]:
+        """分析各指标的趋势
+        
+        Returns:
+            趋势分析结果
+        """
+        trends = {}
+        
+        # 分析各个时间窗口的趋势
+        for window_name, window_size in self.analysis_windows.items():
+            window_trends = {}
+            
+            # 分析每个指标
+            for metric_name, metric_values in self.performance_metrics.items():
+                if len(metric_values) >= window_size:
+                    recent_values = metric_values[-window_size:]
+                    
+                    # 计算趋势
+                    trend = sum(b - a for a, b in zip(recent_values[:-1], recent_values[1:])) / (window_size - 1)
+                    
+                    # 计算波动性
+                    volatility = np.std(recent_values)
+                    
+                    window_trends[metric_name] = {
+                        'direction': trend,
+                        'volatility': volatility,
+                        'current': recent_values[-1],
+                        'average': np.mean(recent_values)
+                    }
+            
+            trends[window_name] = window_trends
+        
+        return trends
+    
+    def _detect_anomalies(self) -> List[Dict[str, Any]]:
+        """检测异常情况
+        
+        Returns:
+            检测到的异常列表
+        """
+        anomalies = []
+        
+        # 检查性能急剧下降
+        if len(self.performance_metrics['accuracy']) >= 2:
+            perf_drop = self.performance_metrics['accuracy'][-2] - \
+                       self.performance_metrics['accuracy'][-1]
+            if perf_drop > self.anomaly_thresholds['performance_drop']:
+                anomalies.append({
+                    'type': 'performance_drop',
+                    'severity': perf_drop,
+                    'timestamp': time.time()
+                })
+        
+        # 检查资源使用异常
+        if self.feedback_history['resource_usage']:
+            latest_usage = self.feedback_history['resource_usage'][-1]
+            if any(usage > self.anomaly_thresholds['resource_spike'] 
+                  for usage in latest_usage.values()):
+                anomalies.append({
+                    'type': 'resource_spike',
+                    'severity': max(latest_usage.values()),
+                    'timestamp': time.time()
+                })
+        
+        # 检查稳定性问题
+        if self.performance_metrics['stability']:
+            latest_stability = self.performance_metrics['stability'][-1]
+            if latest_stability < self.anomaly_thresholds['stability_loss']:
+                anomalies.append({
+                    'type': 'stability_loss',
+                    'severity': 1.0 - latest_stability,
+                    'timestamp': time.time()
+                })
+        
+        return anomalies
+    
+    def _identify_bottlenecks(self) -> Dict[str, Any]:
+        """识别系统瓶颈
+        
+        Returns:
+            识别出的瓶颈信息
+        """
+        bottlenecks = {
+            'resource_bottlenecks': [],
+            'performance_bottlenecks': [],
+            'coordination_bottlenecks': []
         }
+        
+        # 分析资源瓶颈
+        if self.feedback_history['resource_usage']:
+            recent_usage = self.feedback_history['resource_usage'][-self.analysis_windows['short_term']:]
+            avg_usage = {
+                resource: np.mean([usage[resource] for usage in recent_usage])
+                for resource in recent_usage[0].keys()
+            }
+            
+            # 识别高负载资源
+            for resource, usage in avg_usage.items():
+                if usage > 0.8:  # 资源使用率超过80%
+                    bottlenecks['resource_bottlenecks'].append({
+                        'resource': resource,
+                        'usage': usage,
+                        'severity': (usage - 0.8) / 0.2  # 映射到[0,1]
+                    })
+        
+        # 分析性能瓶颈
+        for metric_name, metric_values in self.performance_metrics.items():
+            if len(metric_values) >= self.analysis_windows['short_term']:
+                recent_values = metric_values[-self.analysis_windows['short_term']:]
+                avg_value = np.mean(recent_values)
+                
+                if avg_value < 0.3:  # 性能指标过低
+                    bottlenecks['performance_bottlenecks'].append({
+                        'metric': metric_name,
+                        'value': avg_value,
+                        'severity': (0.3 - avg_value) / 0.3  # 映射到[0,1]
+                    })
+        
+        # 分析协同瓶颈
+        if self.feedback_history['coordination']:
+            recent_coord = self.feedback_history['coordination'][-self.analysis_windows['short_term']:]
+            avg_coord = np.mean(recent_coord)
+            
+            if avg_coord < 0.4:  # 协同效果不佳
+                bottlenecks['coordination_bottlenecks'].append({
+                    'type': 'general_coordination',
+                    'value': avg_coord,
+                    'severity': (0.4 - avg_coord) / 0.4  # 映射到[0,1]
+                })
+        
+        return bottlenecks
+    
+    def _generate_suggestions(self) -> List[Dict[str, Any]]:
+        """生成优化建议
+        
+        Returns:
+            优化建议列表
+        """
+        suggestions = []
+        
+        # 分析趋势
+        trends = self._analyze_trends()
+        
+        # 基于短期趋势生成建议
+        if 'short_term' in trends:
+            for metric_name, trend_info in trends['short_term'].items():
+                if trend_info['direction'] < 0:  # 指标下降
+                    suggestions.append({
+                        'type': 'performance_optimization',
+                        'target': metric_name,
+                        'priority': abs(trend_info['direction']),
+                        'suggestion': f'Optimize {metric_name} to reverse negative trend'
+                    })
+        
+        # 基于异常检测生成建议
+        anomalies = self._detect_anomalies()
+        for anomaly in anomalies:
+            suggestions.append({
+                'type': 'anomaly_resolution',
+                'target': anomaly['type'],
+                'priority': anomaly['severity'],
+                'suggestion': f'Resolve {anomaly["type"]} anomaly'
+            })
+        
+        # 基于瓶颈分析生成建议
+        bottlenecks = self._identify_bottlenecks()
+        for bottleneck_type, bottleneck_list in bottlenecks.items():
+            for bottleneck in bottleneck_list:
+                suggestions.append({
+                    'type': 'bottleneck_mitigation',
+                    'target': bottleneck_type,
+                    'priority': bottleneck.get('severity', 0.5),
+                    'suggestion': f'Mitigate {bottleneck_type} bottleneck'
+                })
+        
+        # 对建议进行优先级排序
+        suggestions.sort(key=lambda x: x['priority'], reverse=True)
+        
+        return suggestions
+    
+    def _generate_resource_adjustments(self, 
+                                     bottlenecks: Dict[str, Any]) -> Dict[str, float]:
+        """生成资源调整建议
+        
+        Args:
+            bottlenecks: 系统瓶颈信息
+            
+        Returns:
+            资源调整方案
+        """
+        adjustments = {}
+        
+        # 处理资源瓶颈
+        for bottleneck in bottlenecks.get('resource_bottlenecks', []):
+            resource = bottleneck['resource']
+            severity = bottleneck['severity']
+            
+            # 根据瓶颈严重程度生成调整建议
+            adjustments[resource] = max(0.2, min(0.8, 1.0 - severity))
+        
+        return adjustments
+    
+    def _generate_state_transitions(self, 
+                                  trends: Dict[str, Any]) -> Dict[str, Any]:
+        """生成状态转换建议
+        
+        Args:
+            trends: 趋势分析结果
+            
+        Returns:
+            状态转换建议
+        """
+        transitions = {
+            'target_state': {},
+            'transition_speed': 0.1,
+            'priority': 0.5
+        }
+        
+        # 基于短期趋势调整目标状态
+        if 'short_term' in trends:
+            st_trends = trends['short_term']
+            
+            # 根据性能趋势调整
+            if 'accuracy' in st_trends:
+                acc_trend = st_trends['accuracy']
+                if acc_trend['direction'] < 0:  # 性能下降
+                    transitions['target_state']['plasticity'] = 0.7  # 增加可塑性
+                    transitions['transition_speed'] = 0.2  # 加快转换
+                    transitions['priority'] = 0.8
+                elif acc_trend['direction'] > 0:  # 性能提升
+                    transitions['target_state']['stability'] = 0.7  # 增加稳定性
+                    transitions['transition_speed'] = 0.1  # 减缓转换
+                    transitions['priority'] = 0.6
+        
+        return transitions
+    
+    def _generate_optimization_directives(self, 
+                                        analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """生成优化指令
+        
+        Args:
+            analysis: 分析报告
+            
+        Returns:
+            优化指令列表
+        """
+        directives = []
+        
+        # 基于建议生成优化指令
+        for suggestion in analysis.get('suggestions', []):
+            if suggestion['type'] == 'performance_optimization':
+                directives.append({
+                    'type': 'optimization',
+                    'target': suggestion['target'],
+                    'action': 'adjust_parameters',
+                    'parameters': {
+                        'learning_rate': 0.1,
+                        'exploration_rate': 0.2
+                    }
+                })
+            elif suggestion['type'] == 'bottleneck_mitigation':
+                directives.append({
+                    'type': 'mitigation',
+                    'target': suggestion['target'],
+                    'action': 'reallocate_resources',
+                    'parameters': {
+                        'allocation_priority': 0.8,
+                        'reallocation_ratio': 0.3
+                    }
+                })
+        
+        return directives
+    
+    def _generate_architecture_adjustments(self, 
+                                         anomalies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """生成架构调整建议
+        
+        Args:
+            anomalies: 检测到的异常
+            
+        Returns:
+            架构调整建议列表
+        """
+        adjustments = []
+        
+        # 基于异常生成架构调整建议
+        for anomaly in anomalies:
+            if anomaly['type'] == 'performance_drop':
+                adjustments.append({
+                    'type': 'architecture_optimization',
+                    'target': 'processing_pipeline',
+                    'action': 'add_capacity',
+                    'parameters': {
+                        'capacity_increase': 0.3,
+                        'target_component': 'processing_units'
+                    }
+                })
+            elif anomaly['type'] == 'resource_spike':
+                adjustments.append({
+                    'type': 'architecture_optimization',
+                    'target': 'resource_management',
+                    'action': 'optimize_allocation',
+                    'parameters': {
+                        'allocation_strategy': 'dynamic',
+                        'buffer_size': 0.2
+                    }
+                })
+        
+        return adjustments
 
-class ThinkingLevel:
+class ThinkingLevel(nn.Module):
     """思维层次基类重构
     
     TODO:
@@ -464,18 +939,111 @@ class ThinkingLevel:
     4. 实现层次间协同机制
     """
     def __init__(self, level_id):
+        super().__init__()
         self.level_id = level_id
         self.resource_manager = ResourceManager()
         self.state_controller = StateController()
         self.feedback_system = FeedbackSystem()
         
-    def process(self, input_data, context):
-        # TODO: 重构处理流程
-        pass
+    def process(self, input_data: torch.Tensor, context: Dict[str, Any]) -> Tuple[torch.Tensor, float]:
+        """处理输入数据
         
-    def update(self, feedback):
-        # TODO: 重构更新机制
-        pass
+        Args:
+            input_data: 输入数据
+            context: 上下文信息
+            
+        Returns:
+            处理结果和置信度
+        """
+        start_time = time.time()
+        
+        # 获取资源分配
+        resources = self.resource_manager.allocate(
+            demand={
+                'computation': 0.5,
+                'memory': 0.3,
+                'attention': 0.2
+            },
+            context=context
+        )
+        
+        # 获取当前状态
+        state_feedback = self.state_controller.monitor_stability()
+        
+        # 处理数据
+        output = self._process_impl(input_data, context)
+        
+        # 计算置信度
+        confidence = self._calculate_confidence(output)
+        
+        # 计算处理时间
+        processing_time = time.time() - start_time
+        
+        # 更新状态
+        self.state = ThinkingState(
+            level=self.level_id,
+            confidence=confidence,
+            attention_weights=None,  # 由子类设置
+            memory_context=None,     # 由子类设置
+            configuration=context.get('config'),
+            resource_usage=sum(resources.values()),
+            processing_time=processing_time,
+            output_norm=torch.norm(output).item()
+        )
+        
+        return output, confidence
+        
+    def _process_impl(self, input_data: torch.Tensor, context: Dict[str, Any]) -> torch.Tensor:
+        """实际的处理逻辑
+        
+        由子类实现
+        
+        Args:
+            input_data: 输入数据
+            context: 上下文信息
+            
+        Returns:
+            处理结果
+        """
+        raise NotImplementedError
+        
+    def _calculate_confidence(self, output: torch.Tensor) -> float:
+        """计算置信度
+        
+        由子类实现
+        
+        Args:
+            output: 处理结果
+            
+        Returns:
+            置信度
+        """
+        return 0.5  # 默认中等置信度
+        
+    def update(self, feedback: float) -> None:
+        """更新处理策略
+        
+        Args:
+            feedback: 外部反馈
+        """
+        # 收集反馈
+        self.feedback_system.collect_feedback({
+            'performance': feedback,
+            'resource_usage': self.state.resource_usage,
+            'processing_time': self.state.processing_time
+        })
+        
+        # 分析反馈
+        analysis = self.feedback_system.analyze_feedback()
+        
+        # 调整状态
+        self.state_controller.adjust_state(
+            feedback={'performance': feedback},
+            context=analysis
+        )
+        
+        # 优化资源分配
+        self.resource_manager.optimize_allocation()
 
 class FastIntuitionLevel(ThinkingLevel):
     """快速直觉处理层
@@ -486,16 +1054,15 @@ class FastIntuitionLevel(ThinkingLevel):
     3. 使用浅层网络以保证响应速度
     """
     
-    def __init__(self, level_id: int, config: LevelConfig):
+    def __init__(self, level_id: int, config: SystemConfig):
         super().__init__(level_id)
-        self.config = config
         
         # 使用简单的前馈网络
         self.network = nn.Sequential(
             nn.Linear(config.input_size, config.hidden_size),
             nn.ReLU(),
             nn.Dropout(config.dropout),
-            nn.Linear(config.hidden_size, config.input_size)
+            nn.Linear(config.hidden_size, config.input_size)  # 确保输出维度与输入相同
         )
         
         # 置信度评估器
@@ -512,16 +1079,14 @@ class FastIntuitionLevel(ThinkingLevel):
         
         # 优化器
         self.optimizer = torch.optim.Adam([
-            {'params': self.network.parameters(), 'lr': 1e-3},
-            {'params': self.confidence_net.parameters(), 'lr': 5e-4}
+            {'params': self.network.parameters(), 'lr': config.base_learning_rate},
+            {'params': self.confidence_net.parameters(), 'lr': config.base_learning_rate * 0.5}
         ])
         
         # 配置状态管理器
         self.config_manager = ConfigStateManager()
         
-    def process(self, 
-                input_data: torch.Tensor,
-                context: Dict[str, Any]) -> Tuple[torch.Tensor, float]:
+    def _process_impl(self, input_data: torch.Tensor, context: Dict[str, Any]) -> torch.Tensor:
         """快速处理输入数据
         
         维度流转:
@@ -534,25 +1099,28 @@ class FastIntuitionLevel(ThinkingLevel):
             context: 上下文信息
             
         Returns:
-            处理后的输出和置信度
+            处理后的输出 [batch_size, input_size]
         """
-        # 获取当前配置
-        current_config = self.config_manager.get_current_config()
-        
-        # 如果输入是3维的，压缩到2维
+        # 如果输入是3维的,压缩到2维
         if input_data.dim() == 3:
             input_data = input_data.squeeze(1)  # [batch_size, 1, input_size] -> [batch_size, input_size]
         elif input_data.dim() != 2:
-            raise ValueError(f"输入维度错误: 期望2维或3维，实际是{input_data.dim()}维")
-        
-        # 应用dropout配置
-        for module in self.network.modules():
-            if isinstance(module, nn.Dropout):
-                module.p = current_config.hidden_dropout
+            raise ValueError(f"输入维度错误: 期望2维或3维,实际是{input_data.dim()}维")
         
         # 快速前向处理
         output = self.network(input_data)  # [batch_size, input_size]
         
+        return output
+        
+    def _calculate_confidence(self, output: torch.Tensor) -> float:
+        """计算置信度
+        
+        Args:
+            output: 处理结果
+            
+        Returns:
+            置信度
+        """
         # 计算置信度
         batch_confidences = self.confidence_net(output)  # [batch_size, 1]
         confidence = torch.mean(batch_confidences).item()  # 平均置信度
@@ -560,313 +1128,204 @@ class FastIntuitionLevel(ThinkingLevel):
         # 记录置信度
         self.confidence_history.append(confidence)
         
-        # 更新状态
-        self.state = ThinkingState(
-            level=self.level_id,
-            confidence=confidence,
-            attention_weights=None,
-            memory_context=None,
-            configuration=current_config
-        )
-        
-        return output, confidence
-        
-    def update(self, performance: float) -> None:
-        """根据性能反馈更新处理策略
-        
-        Args:
-            performance: 性能评分 (0.0 ~ 1.0)
-        """
-        # 记录性能
-        self.performance_history.append(performance)
-        self.config_manager.record_performance(performance)
-        
-        # 检查是否需要状态转换
-        if self.config_manager.should_transition():
-            next_state = self.config_manager.get_next_state()
-            if next_state != self.config_manager.current_state:
-                self.config_manager.current_state = next_state
-                new_config = self.config_manager.get_current_config()
-                
-                # 更新优化器学习率
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = new_config.learning_rate
-        
-        # 计算最近的性能趋势
-        if len(self.performance_history) >= 3:
-            recent_perf = self.performance_history[-3:]
-            trend = sum(b - a for a, b in zip(recent_perf[:-1], recent_perf[1:]))
-            
-            # 根据趋势调整网络
-            if trend < 0:  # 性能下降
-                # 增加学习力度
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] *= 1.2
-            elif trend > 0:  # 性能提升
-                # 保持当前策略
-                pass
-            else:  # 性能稳定
-                # 适当降低学习力度
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] *= 0.9
-        
-        # 分析置信度
-        if len(self.confidence_history) >= 5:
-            recent_conf = torch.tensor(self.confidence_history[-5:])
-            conf_std = torch.std(recent_conf).item()
-            
-            # 如果置信度波动较大，增加稳定性
-            if conf_std > 0.2:
-                current_config = self.config_manager.get_current_config()
-                for module in self.network.modules():
-                    if isinstance(module, nn.Dropout):
-                        module.p = min(module.p + 0.05, current_config.hidden_dropout + 0.1)
-            
-            # 如果置信度持续较低，增加网络容量
-            if torch.mean(recent_conf).item() < 0.3:
-                # TODO: 实现动态网络扩展机制
-                pass
-        
-        # 清理历史记录（保留最近50条）
-        if len(self.performance_history) > 50:
-            self.performance_history = self.performance_history[-50:]
-        if len(self.confidence_history) > 50:
-            self.confidence_history = self.confidence_history[-50:]
+        return confidence
 
 class AnalyticalLevel(ThinkingLevel):
     """分析处理层
     
-    这一层负责更深入的分析处理，特点是:
-    1. 结构相对复杂，包含注意力机制
-    2. 适合需要细致分析的任务
-    3. 可以关注输入的不同部分
+    负责深入分析和处理，特点是:
+    1. 使用注意力机制关注重要信息
+    2. 多层次信息处理
+    3. 动态资源分配
     """
     
-    def __init__(self, level_id: int, config: LevelConfig):
+    def __init__(self, level_id: int, config: SystemConfig):
         super().__init__(level_id)
-        self.config = config
         
-        # 多头注意力层
+        # 核心网络组件
+        self.input_size = config.input_size
+        self.hidden_size = config.hidden_size
+        self.num_heads = config.attention_heads
+        
+        # 注意力层
         self.attention = nn.MultiheadAttention(
-            embed_dim=config.hidden_size,
-            num_heads=config.attention_heads,
+            embed_dim=self.hidden_size,
+            num_heads=self.num_heads,
             dropout=config.dropout
         )
         
-        # 输入映射层
-        self.input_map = nn.Linear(config.input_size, config.hidden_size)
+        # 特征提取网络
+        self.feature_net = nn.Sequential(
+            nn.Linear(self.input_size, self.hidden_size),
+            nn.LayerNorm(self.hidden_size),
+            nn.ReLU(),
+            nn.Dropout(config.dropout)
+        )
         
-        # 处理网络
-        self.network = nn.Sequential(
-            nn.LayerNorm(config.hidden_size),
+        # 分析网络
+        self.analysis_net = nn.Sequential(
+            nn.Linear(self.hidden_size, self.hidden_size),
+            nn.LayerNorm(self.hidden_size),
             nn.ReLU(),
             nn.Dropout(config.dropout),
-            nn.Linear(config.hidden_size, config.hidden_size),
-            nn.LayerNorm(config.hidden_size),
-            nn.ReLU(),
-            nn.Linear(config.hidden_size, config.input_size)
+            nn.Linear(self.hidden_size, self.input_size)
         )
         
         # 置信度评估器
         self.confidence_net = nn.Sequential(
-            nn.Linear(config.input_size + config.hidden_size, config.hidden_size),
+            nn.Linear(self.input_size + self.hidden_size, self.hidden_size),
             nn.ReLU(),
-            nn.Linear(config.hidden_size, 1),
+            nn.Linear(self.hidden_size, 1),
             nn.Sigmoid()
         )
-
-        # 注意力头重要性评估器
-        self.head_importance = nn.Parameter(
-            torch.ones(config.attention_heads) / config.attention_heads
-        )
-        
-        # 性能历史记录
-        self.performance_history = []
-        self.confidence_history = []
-        self.attention_history = []
         
         # 优化器
-        self.optimizer = torch.optim.Adam([
-            {'params': self.attention.parameters(), 'lr': 1e-3},
-            {'params': self.network.parameters(), 'lr': 5e-4},
-            {'params': self.confidence_net.parameters(), 'lr': 5e-4},
-            {'params': self.head_importance, 'lr': 1e-4}
-        ])
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=config.base_learning_rate)
         
-        # 配置状态管理器
-        self.config_manager = ConfigStateManager()
-        
-    def process(self,
-                input_data: torch.Tensor,
-                context: Dict[str, Any]) -> Tuple[torch.Tensor, float]:
-        """分析处理输入数据
+        # 状态记录
+        self.attention_weights = None
+        self.feature_importance = None
+    
+    def _process_impl(self, input_data: torch.Tensor, context: Dict[str, Any]) -> torch.Tensor:
+        """处理输入数据
         
         维度流转:
         1. 输入: [batch_size, input_size] 或 [batch_size, 1, input_size]
-        2. 统一到: [batch_size, 1, input_size]
-        3. 隐藏层: [batch_size, 1, hidden_size]
-        4. 注意力: [1, batch_size, hidden_size]
-        5. 输出: [batch_size, input_size]
+        2. 特征: [batch_size, hidden_size]
+        3. 注意力: [seq_len, batch_size, hidden_size]
+        4. 输出: [batch_size, input_size]
         
         Args:
-            input_data: 输入张量 [batch_size, input_size] 或 [batch_size, 1, input_size]
+            input_data: 输入数据
             context: 上下文信息
             
         Returns:
-            处理后的输出 [batch_size, input_size] 和置信度
+            处理后的输出
         """
-        # 获取当前配置
-        current_config = self.config_manager.get_current_config()
-        
-        # 1. 确保输入是3维 [batch_size, 1, input_size]
-        if input_data.dim() == 2:
-            input_data = input_data.unsqueeze(1)  # [batch_size, input_size] -> [batch_size, 1, input_size]
-        elif input_data.dim() != 3:
-            raise ValueError(f"输入维度错误: 期望2维或3维，实际是{input_data.dim()}维")
-        
-        # 2. 映射到隐藏维度 [batch_size, 1, hidden_size]
+        # 1. 确保输入是2维的
+        if input_data.dim() == 3:
+            input_data = input_data.squeeze(1)  # [batch_size, 1, input_size] -> [batch_size, input_size]
+        elif input_data.dim() != 2:
+            raise ValueError(f"输入维度错误: 期望2维或3维(中间维度为1), 实际是{input_data.dim()}维")
+            
         batch_size = input_data.size(0)
-        hidden = self.input_map(input_data.view(-1, input_data.size(-1)))  # [batch_size, hidden_size]
-        hidden = hidden.view(batch_size, 1, -1)  # [batch_size, 1, hidden_size]
         
-        # 3. 调整维度顺序以适应MultiheadAttention
-        hidden = hidden.transpose(0, 1)  # [1, batch_size, hidden_size]
+        # 2. 特征提取
+        features = self.feature_net(input_data)  # [batch_size, hidden_size]
+        
+        # 3. 准备注意力输入
+        # 调整维度顺序为 [seq_len, batch_size, hidden_size]
+        query = features.unsqueeze(0)  # [1, batch_size, hidden_size]
+        key = query                    # [1, batch_size, hidden_size]
+        value = query                  # [1, batch_size, hidden_size]
         
         # 4. 应用注意力机制
-        attended_data, attention_weights = self.attention(
-            hidden,  # [1, batch_size, hidden_size]
-            hidden,  # [1, batch_size, hidden_size]
-            hidden   # [1, batch_size, hidden_size]
-        )
+        attended_features, attention_weights = self.attention(
+            query=query,
+            key=key,
+            value=value,
+            need_weights=True
+        )  # attended_features: [1, batch_size, hidden_size]
+           # attention_weights: [batch_size, 1, 1]
         
-        # 5. 恢复原始维度顺序
-        attended_data = attended_data.transpose(0, 1)  # [batch_size, 1, hidden_size]
-        attention_weights = attention_weights.transpose(1, 2)  # [batch_size, 1, 1]
+        # 5. 保存注意力权重用于置信度计算
+        # 确保attention_weights的维度是 [batch_size, 1]
+        if attention_weights.dim() == 3:
+            self.attention_weights = attention_weights.squeeze(1)  # [batch_size, 1]
+        else:
+            self.attention_weights = attention_weights.unsqueeze(1)  # [batch_size, 1]
         
-        # 记录注意力权重
-        self.attention_history.append(attention_weights.detach())
+        # 6. 处理注意力输出
+        # 确保attended_features的维度是 [batch_size, hidden_size]
+        if attended_features.dim() == 3:
+            attended_features = attended_features.squeeze(0)  # [1, batch_size, hidden_size] -> [batch_size, hidden_size]
         
-        # 6. 使用注意力加权平均得到每个batch的表示
-        attended_features = torch.bmm(
-            attention_weights,  # [batch_size, 1, 1]
-            attended_data      # [batch_size, 1, hidden_size]
-        ).squeeze(1)  # [batch_size, hidden_size]
+        # 7. 分析处理
+        output = self.analysis_net(attended_features)  # [batch_size, input_size]
         
-        # 7. 生成输出
-        output = self.network(attended_features)  # [batch_size, input_size]
+        # 8. 验证输出维度
+        assert output.dim() == 2 and output.size(0) == batch_size and output.size(1) == self.input_size, \
+            f"输出维度错误: 期望[{batch_size}, {self.input_size}], 实际是{output.size()}"
         
-        # 8. 计算置信度
-        confidence_input = torch.cat([
-            output,             # [batch_size, input_size]
-            attended_features   # [batch_size, hidden_size]
-        ], dim=-1)  # [batch_size, input_size + hidden_size]
+        return output
         
-        confidence = torch.mean(self.confidence_net(confidence_input)).item()
+    def _calculate_confidence(self, output: torch.Tensor) -> float:
+        """计算处理结果的置信度
         
-        # 记录置信度
-        self.confidence_history.append(confidence)
-        
-        # 更新状态
-        self.state = ThinkingState(
-            level=self.level_id,
-            confidence=confidence,
-            attention_weights=attention_weights,
-            memory_context=None,
-            configuration=current_config
-        )
-        
-        return output, confidence
-        
-    def update(self, performance: float) -> None:
-        """根据性能反馈更新处理策略
+        维度流转:
+        1. 输入: [batch_size, input_size]
+        2. 注意力权重: [batch_size, 1]
+        3. 注意力上下文: [batch_size, input_size]
+        4. 置信度输入: [batch_size, input_size * 2]
+        5. 置信度输出: [batch_size, 1]
         
         Args:
-            performance: 性能评分 (0.0 ~ 1.0)
+            output: 处理结果 [batch_size, input_size]
+            
+        Returns:
+            置信度值 (0.0 ~ 1.0)
         """
-        # 记录性能
-        self.performance_history.append(performance)
-        self.config_manager.record_performance(performance)
+        batch_size = output.size(0)
         
-        # 检查是否需要状态转换
-        if self.config_manager.should_transition():
-            next_state = self.config_manager.get_next_state()
-            if next_state != self.config_manager.current_state:
-                self.config_manager.current_state = next_state
-                new_config = self.config_manager.get_current_config()
-                
-                # 更新注意力dropout
-                self.attention.dropout = new_config.attention_dropout
-                
-                # 更新网络dropout
-                for module in self.network.modules():
-                    if isinstance(module, nn.Dropout):
-                        module.p = new_config.hidden_dropout
-                
-                # 更新优化器学习率
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = new_config.learning_rate
+        # 1. 确保输入维度正确
+        assert output.dim() == 2 and output.size(1) == self.input_size, \
+            f"输入维度错误: 期望[batch_size, {self.input_size}], 实际是{output.size()}"
         
-        # 分析注意力头的重要性
-        if len(self.attention_history) >= 5:
-            recent_attention = torch.stack(self.attention_history[-5:])
-            head_activity = recent_attention.mean(dim=[0, 2, 3])  # 平均每个头的活跃度
-            
-            # 更新头部重要性
-            with torch.no_grad():
-                self.head_importance.data = torch.softmax(head_activity, dim=0)
-            
-            # 如果某些头的重要性过低，增加其学习率
-            for i, importance in enumerate(self.head_importance):
-                if importance < 0.1:  # 重要性低于阈值
-                    for param in self.attention.parameters():
-                        if param.requires_grad and param.dim() > 1:
-                            param.data[i] *= 1.1  # 稍微增强该头的权重
+        # 2. 确保注意力权重维度正确
+        if self.attention_weights is None:
+            self.attention_weights = torch.ones(batch_size, 1, device=output.device)
+        elif self.attention_weights.size(0) != batch_size:
+            # 如果batch_size不匹配，调整注意力权重
+            self.attention_weights = self.attention_weights.expand(batch_size, 1)
         
-        # 分析性能趋势
-        if len(self.performance_history) >= 3:
-            recent_perf = self.performance_history[-3:]
-            trend = sum(b - a for a, b in zip(recent_perf[:-1], recent_perf[1:]))
-            
-            # 根据趋势调整网络
-            if trend < 0:  # 性能下降
-                # 增加注意力强度
-                with torch.no_grad():
-                    for param in self.attention.parameters():
-                        if param.requires_grad:
-                            param.data *= 1.1
-            elif trend > 0:  # 性能提升
-                # 保持当前策略
-                pass
-            else:  # 性能稳定
-                # 适当降低学习率
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] *= 0.95
+        # 3. 计算注意力上下文
+        attention_context = output * self.attention_weights  # [batch_size, input_size]
         
-        # 分析置信度
-        if len(self.confidence_history) >= 5:
-            recent_conf = torch.tensor(self.confidence_history[-5:])
-            conf_std = torch.std(recent_conf).item()
-            
-            # 如果置信度波动较大，增加注意力dropout
-            if conf_std > 0.2:
-                current_config = self.config_manager.get_current_config()
-                self.attention.dropout = min(
-                    self.attention.dropout + 0.05,
-                    current_config.attention_dropout + 0.1
-                )
-            
-            # 如果置信度持续较低，考虑增加注意力头数
-            if torch.mean(recent_conf).item() < 0.3:
-                # TODO: 实现动态注意力头扩展机制
-                pass
+        # 4. 组合特征用于置信度评估
+        confidence_features = torch.cat([
+            output,            # [batch_size, input_size]
+            attention_context  # [batch_size, input_size]
+        ], dim=-1)  # [batch_size, input_size * 2]
         
-        # 清理历史记录（保留最近50条）
-        if len(self.performance_history) > 50:
-            self.performance_history = self.performance_history[-50:]
-        if len(self.confidence_history) > 50:
-            self.confidence_history = self.confidence_history[-50:]
-        if len(self.attention_history) > 50:
-            self.attention_history = self.attention_history[-50:]
+        # 5. 计算置信度
+        confidence = self.confidence_net(confidence_features)  # [batch_size, 1]
+        
+        # 6. 返回平均置信度
+        return torch.mean(confidence).item()
+        
+    def update(self, feedback: float) -> None:
+        """根据反馈更新处理策略
+        
+        Args:
+            feedback: 外部反馈值 (-1.0 ~ 1.0)
+        """
+        # 1. 收集性能指标
+        performance_metrics = {
+            'feedback': feedback,
+            'confidence': self.state.confidence,
+            'resource_usage': self.state.resource_usage,
+            'processing_time': self.state.processing_time
+        }
+        
+        # 2. 分析反馈
+        feedback_analysis = self.feedback_system.collect_feedback(performance_metrics)
+        
+        # 3. 根据分析结果调整状态
+        self.state_controller.adjust_state(
+            feedback={'performance': feedback},
+            context=feedback_analysis
+        )
+        
+        # 4. 优化资源分配
+        self.resource_manager.optimize_allocation()
+        
+        # 5. 根据反馈调整学习率
+        if feedback < 0:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] *= 0.9  # 降低学习率
+        elif feedback > 0.8:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] *= 1.1  # 提高学习率
 
 class AbstractReasoningLevel(ThinkingLevel):
     """抽象推理层
@@ -949,125 +1408,168 @@ class AbstractReasoningLevel(ThinkingLevel):
         # 配置状态管理器
         self.config_manager = ConfigStateManager()
         
-    def process(self,
-                input_data: torch.Tensor,
-                context: Dict[str, Any]) -> Tuple[torch.Tensor, float]:
-        """执行抽象推理处理
+        # 添加层级间通信缓冲区
+        self.communication_buffer = {
+            'bottom_up': [],    # 来自低层的信息
+            'top_down': [],     # 来自高层的控制信号
+            'lateral': []       # 同层交互信息
+        }
         
-        维度流转:
-        1. 输入: [batch_size, input_size] 或 [batch_size, 1, input_size]
-        2. 统一到: [batch_size, input_size]
-        3. 概念编码: [batch_size, hidden_size]
-        4. 关系推理: [batch_size, hidden_size]
-        5. 规则生成: [batch_size, hidden_size]
-        6. 输出: [batch_size, input_size]
+        # 添加资源监控
+        self.resource_usage = {
+            'computation': [],  # 计算资源使用
+            'memory': [],      # 内存使用
+            'attention': []    # 注意力资源使用
+        }
         
-        Args:
-            input_data: 输入张量 [batch_size, input_size] 或 [batch_size, 1, input_size]
-            context: 上下文信息
-            
-        Returns:
-            推理结果和置信度
-        """
-        # 获取当前配置
-        current_config = self.config_manager.get_current_config()
+        # 添加性能指标
+        self.metrics = {
+            'rule_efficiency': [],     # 规则使用效率
+            'concept_clarity': [],     # 概念表示清晰度
+            'inference_quality': [],   # 推理质量
+            'resource_efficiency': []  # 资源使用效率
+        }
+    
+    def _process_impl(self, input_data: torch.Tensor, context: Dict[str, Any]) -> torch.Tensor:
+        """处理输入数据（增加资源跟踪）"""
+        start_time = time.time()
         
-        # 1. 确保输入是2维 [batch_size, input_size]
-        if input_data.dim() == 3:
-            input_data = input_data.squeeze(1)  # [batch_size, 1, input_size] -> [batch_size, input_size]
-        elif input_data.dim() != 2:
-            raise ValueError(f"输入维度错误: 期望2维或3维，实际是{input_data.dim()}维")
+        # 获取当前可用资源
+        available_resources = context.get('resources', {
+            'computation': 1.0,
+            'memory': 1.0,
+            'attention': 1.0
+        })
         
-        # 2. 概念编码
-        concepts = self.concept_encoder(input_data)  # [batch_size, hidden_size]
+        # 处理来自其他层级的信息
+        self._process_communications()
         
-        # 3. 关系推理
-        relations = concepts
-        for relation_layer in self.relation_net:
-            # 计算当前概念与规则库的关系
-            rule_relations = torch.matmul(relations, self.rule_memory)  # [batch_size, hidden_size]
-            # 组合原始概念和关系信息
-            combined = torch.cat([relations, rule_relations], dim=-1)  # [batch_size, hidden_size * 2]
-            # 更新关系表示
-            relations = relation_layer(combined)  # [batch_size, hidden_size]
+        # 原有的处理逻辑...
+        output, confidence = super().process(input_data, context)
         
-        # 4. 规则生成和更新
-        new_rules = self.rule_generator(relations)  # [batch_size, hidden_size]
-        rule_attention = torch.softmax(
-            torch.matmul(new_rules, self.rule_memory.T),  # [batch_size, hidden_size]
-            dim=-1
-        )
+        # 更新资源使用情况
+        processing_time = time.time() - start_time
+        self.update_resource_usage({
+            'computation': processing_time / context.get('time_budget', 1.0),
+            'memory': sys.getsizeof(self.rule_memory.data) / (1024 * 1024),  # MB
+            'attention': torch.mean(torch.abs(self.rule_memory)).item()
+        })
         
-        # 记录规则使用情况
-        self.rule_usage_history.append(rule_attention.detach())
-        
-        # 5. 推理应用
-        reasoning_input = torch.cat([concepts, relations], dim=-1)  # [batch_size, hidden_size * 2]
-        output = self.reasoning_net(reasoning_input)  # [batch_size, input_size]
-        
-        # 6. 计算置信度
-        confidence_features = torch.cat([
-            concepts.mean(dim=0),    # [hidden_size]
-            relations.mean(dim=0),   # [hidden_size]
-            new_rules.mean(dim=0)    # [hidden_size]
-        ])  # [hidden_size * 3]
-        
-        confidence = torch.mean(self.confidence_net(confidence_features.unsqueeze(0))).item()
-        
-        # 记录置信度
-        self.confidence_history.append(confidence)
-        
-        # 更新状态
-        self.state = ThinkingState(
-            level=self.level_id,
-            confidence=confidence,
-            attention_weights=rule_attention,
-            memory_context={"rule_memory": self.rule_memory.detach()},
-            configuration=current_config
-        )
+        # 计算性能指标
+        self.calculate_metrics()
         
         return output, confidence
         
-    def update(self, performance: float) -> None:
-        """根据性能反馈更新推理策略
+    def _process_communications(self) -> None:
+        """处理层级间的通信"""
+        # 处理自下而上的信息
+        if self.communication_buffer['bottom_up']:
+            bottom_up_info = self.communication_buffer['bottom_up'][-1]
+            # 根据低层信息调整概念编码器
+            if 'feature_importance' in bottom_up_info:
+                self._adjust_concept_encoding(bottom_up_info['feature_importance'])
+                
+        # 处理自上而下的控制信号
+        if self.communication_buffer['top_down']:
+            top_down_control = self.communication_buffer['top_down'][-1]
+            # 根据高层控制调整推理策略
+            if 'strategy_adjustment' in top_down_control:
+                self._adjust_reasoning_strategy(top_down_control['strategy_adjustment'])
+                
+        # 处理同层交互
+        if self.communication_buffer['lateral']:
+            lateral_info = self.communication_buffer['lateral'][-1]
+            # 与同层交换规则信息
+            if 'shared_rules' in lateral_info:
+                self._exchange_rules(lateral_info['shared_rules'])
+                
+    def _adjust_concept_encoding(self, feature_importance: torch.Tensor) -> None:
+        """根据特征重要性调整概念编码"""
+        with torch.no_grad():
+            # 调整输入层权重
+            first_layer = next(self.concept_encoder.parameters())
+            importance_mask = feature_importance.unsqueeze(0).expand_as(first_layer)
+            first_layer.data *= importance_mask
+            
+    def _adjust_reasoning_strategy(self, strategy: Dict[str, Any]) -> None:
+        """根据高层控制调整推理策略"""
+        if 'rule_generation_threshold' in strategy:
+            # 调整规则生成阈值
+            self.rule_generation_threshold = strategy['rule_generation_threshold']
+            
+        if 'inference_temperature' in strategy:
+            # 调整推理温度
+            self.inference_temperature = strategy['inference_temperature']
+            
+    def _exchange_rules(self, shared_rules: torch.Tensor) -> None:
+        """与同层交换规则信息
         
         Args:
-            performance: 性能评分 (0.0 ~ 1.0)
+            shared_rules: 共享规则张量,维度为 [batch_size, hidden_size]
         """
-        # 记录性能
-        self.performance_history.append(performance)
-        self.config_manager.record_performance(performance)
-        
-        # 检查是否需要状态转换
-        if self.config_manager.should_transition():
-            next_state = self.config_manager.get_next_state()
-            if next_state != self.config_manager.current_state:
-                self.config_manager.current_state = next_state
-                new_config = self.config_manager.get_current_config()
+        with torch.no_grad():
+            # 确保规则内存和共享规则的维度匹配
+            if len(self.rule_memory.shape) == 2:
+                rule_memory = self.rule_memory
+            else:
+                rule_memory = self.rule_memory.squeeze(0)  # [1, hidden_size] -> [hidden_size]
                 
-                # 更新dropout
-                for module in self.modules():
-                    if isinstance(module, nn.Dropout):
-                        module.p = new_config.hidden_dropout
+            if len(shared_rules.shape) == 2:
+                rules = shared_rules
+            else:
+                rules = shared_rules.squeeze(0)  # [1, hidden_size] -> [hidden_size]
                 
-                # 更新优化器学习率
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = new_config.learning_rate
-        
-        # 分析规则使用情况
-        if len(self.rule_usage_history) >= 5:
-            recent_usage = torch.stack(self.rule_usage_history[-5:])
-            rule_importance = recent_usage.mean(dim=[0, 1])  # 计算规则重要性
+            # 计算规则相似度
+            rule_similarity = torch.matmul(rule_memory.unsqueeze(0), rules.T)  # [1, batch_size]
             
-            # 更新规则权重
-            with torch.no_grad():
-                # 增强重要规则
-                important_rules = rule_importance > rule_importance.mean()
-                self.rule_memory.data[important_rules] *= 1.1
+            # 评估规则有用性
+            useful_rules = torch.max(rule_similarity, dim=1)[0] < 0.8
+            
+            if torch.any(useful_rules):
+                # 整合有用的规则
+                useful_shared_rules = rules[useful_rules]
+                self.rule_memory = torch.cat([
+                    rule_memory,
+                    useful_shared_rules
+                ], dim=0).unsqueeze(0)  # 保持 [1, hidden_size] 维度
                 
-                # 弱化不重要规则
-                unimportant_rules = rule_importance < rule_importance.mean() * 0.5
-                self.rule_memory.data[unimportant_rules] *= 0.9
+                # 限制规则库大小
+                if self.rule_memory.size(1) > self.max_rules:
+                    self.rule_memory = self.rule_memory[:, :self.max_rules]
+    
+    def calculate_metrics(self) -> Dict[str, float]:
+        """计算当前性能指标"""
+        if not self.rule_usage_history:
+            return {key: 0.0 for key in self.metrics}
+            
+        # 计算规则使用效率
+        recent_usage = torch.stack(self.rule_usage_history[-5:])
+        rule_efficiency = torch.mean(torch.max(recent_usage, dim=-1)[0]).item()
+        
+        # 计算概念表示清晰度
+        concept_vectors = self.concept_encoder(torch.randn(10, self.config.input_size))
+        rule_importance = recent_usage.mean(dim=[0, 1])  # 计算规则重要性
+        
+        # 计算规则使用频率和有效性
+        rule_frequency = torch.sum(recent_usage > 0.5, dim=[0, 1]) / (recent_usage.size(0) * recent_usage.size(1))
+        rule_effectiveness = rule_importance * performance
+        
+        # 更新规则权重
+        with torch.no_grad():
+            # 增强高效规则
+            effective_rules = rule_effectiveness > rule_effectiveness.mean()
+            self.rule_memory.data[effective_rules] *= 1.1
+            
+            # 弱化低效规则
+            ineffective_rules = (rule_effectiveness < rule_effectiveness.mean() * 0.5) & (rule_frequency > 0.1)
+            self.rule_memory.data[ineffective_rules] *= 0.9
+            
+            # 重新初始化未使用的规则
+            unused_rules = rule_frequency < 0.05
+            if torch.any(unused_rules):
+                self.rule_memory.data[unused_rules] = torch.randn_like(
+                    self.rule_memory.data[unused_rules]
+                ) * 0.1
         
         # 分析性能趋势
         if len(self.performance_history) >= 3:
@@ -1082,12 +1584,27 @@ class AbstractReasoningLevel(ThinkingLevel):
                     
                 # 增加规则生成的多样性
                 with torch.no_grad():
-                    noise = torch.randn_like(self.rule_memory) * 0.1
-                    self.rule_memory.data += noise
+                    # 计算规则相似度矩阵
+                    rule_similarity = torch.matmul(
+                        self.rule_memory, 
+                        self.rule_memory.T
+                    )
+                    # 找出高度相似的规则
+                    similar_pairs = torch.where(
+                        (rule_similarity > 0.9) & 
+                        (torch.eye(rule_similarity.size(0), device=rule_similarity.device) == 0)
+                    )
+                    # 对高度相似的规则添加差异性
+                    if similar_pairs[0].size(0) > 0:
+                        noise = torch.randn_like(
+                            self.rule_memory[similar_pairs[0]]
+                        ) * 0.2
+                        self.rule_memory.data[similar_pairs[0]] += noise
                     
             elif trend > 0:  # 性能提升
-                # 保持当前策略
-                pass
+                # 保持当前策略，但适当降低学习率以稳定表现
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] *= 0.98
             else:  # 性能稳定
                 # 适当降低学习力度
                 for param_group in self.optimizer.param_groups:
@@ -1096,6 +1613,7 @@ class AbstractReasoningLevel(ThinkingLevel):
         # 分析置信度
         if len(self.confidence_history) >= 5:
             recent_conf = torch.tensor(self.confidence_history[-5:])
+            conf_mean = torch.mean(recent_conf).item()
             conf_std = torch.std(recent_conf).item()
             
             # 如果置信度波动较大，增加稳定性
@@ -1105,17 +1623,72 @@ class AbstractReasoningLevel(ThinkingLevel):
                     if isinstance(module, nn.Dropout):
                         module.p = min(module.p + 0.05, current_config.hidden_dropout + 0.1)
             
-            # 如果置信度持续较低，考虑扩展规则库
-            if torch.mean(recent_conf).item() < 0.3:
+            # 动态调整规则库
+            if conf_mean < 0.3:  # 置信度持续较低
                 with torch.no_grad():
-                    new_rules = torch.randn(
-                        self.config.hidden_size // 4,
-                        self.config.hidden_size
-                    ).to(self.rule_memory.device)
-                    self.rule_memory.data = torch.cat([
-                        self.rule_memory.data,
-                        new_rules
-                    ], dim=0)
+                    # 计算规则覆盖度
+                    rule_coverage = torch.sum(
+                        torch.abs(self.rule_memory), 
+                        dim=1
+                    )
+                    # 找出覆盖度低的规则
+                    low_coverage = rule_coverage < rule_coverage.mean() * 0.5
+                    
+                    if torch.any(low_coverage):
+                        # 移除覆盖度低的规则
+                        high_coverage_rules = self.rule_memory.data[~low_coverage]
+                        
+                        # 生成新规则
+                        new_rules = torch.randn(
+                            low_coverage.sum(),
+                            self.rule_memory.size(1)
+                        ).to(self.rule_memory.device) * 0.1
+                        
+                        # 更新规则库
+                        self.rule_memory.data = torch.cat([
+                            high_coverage_rules,
+                            new_rules
+                        ], dim=0)
+            elif conf_mean > 0.8:  # 置信度持续较高
+                # 尝试优化规则间的关系
+                with torch.no_grad():
+                    # 计算规则间的相关性
+                    rule_correlation = torch.corrcoef(self.rule_memory.T)
+                    # 找出高度相关的规则对
+                    high_correlation = torch.where(
+                        (torch.abs(rule_correlation) > 0.9) & 
+                        (torch.eye(rule_correlation.size(0), device=rule_correlation.device) == 0)
+                    )
+                    # 合并高度相关的规则
+                    if high_correlation[0].size(0) > 0:
+                        unique_rules = []
+                        merged = set()
+                        for i, j in zip(*high_correlation):
+                            i, j = i.item(), j.item()
+                            if i not in merged and j not in merged:
+                                # 合并规则
+                                merged_rule = (self.rule_memory.data[i] + self.rule_memory.data[j]) / 2
+                                unique_rules.append(merged_rule)
+                                merged.add(i)
+                                merged.add(j)
+                            elif i not in merged:
+                                unique_rules.append(self.rule_memory.data[i])
+                                merged.add(i)
+                            elif j not in merged:
+                                unique_rules.append(self.rule_memory.data[j])
+                                merged.add(j)
+                        
+                        # 添加一些新规则以保持规则库大小
+                        remaining_count = self.rule_memory.size(0) - len(unique_rules)
+                        if remaining_count > 0:
+                            new_rules = torch.randn(
+                                remaining_count,
+                                self.rule_memory.size(1)
+                            ).to(self.rule_memory.device) * 0.1
+                            unique_rules.extend([new_rules[i] for i in range(remaining_count)])
+                        
+                        # 更新规则库
+                        self.rule_memory.data = torch.stack(unique_rules)
         
         # 清理历史记录（保留最近50条）
         if len(self.performance_history) > 50:
@@ -1264,9 +1837,151 @@ class MetaCognitiveLevel(ThinkingLevel):
         return output, confidence
         
     def update(self, performance: float) -> None:
-        """根据性能反馈更新控制策略"""
-        # TODO: 实现控制策略的适应性调整
-        pass 
+        """根据性能反馈更新控制策略
+        
+        这个方法实现元认知层的自适应调整，包括:
+        1. 策略评估和优化
+        2. 资源分配策略调整
+        3. 控制参数动态调整
+        
+        Args:
+            performance: 性能评分 (0.0 ~ 1.0)
+        """
+        # 记录性能
+        self.performance_history.append(performance)
+        self.config_manager.record_performance(performance)
+        
+        # 检查是否需要状态转换
+        if self.config_manager.should_transition():
+            next_state = self.config_manager.get_next_state()
+            if next_state != self.config_manager.current_state:
+                self.config_manager.current_state = next_state
+                new_config = self.config_manager.get_current_config()
+                
+                # 更新dropout
+                for module in self.modules():
+                    if isinstance(module, nn.Dropout):
+                        module.p = new_config.hidden_dropout
+                
+                # 更新优化器学习率
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = new_config.learning_rate
+        
+        # 分析性能趋势
+        if len(self.performance_history) >= 3:
+            recent_perf = self.performance_history[-3:]
+            trend = sum(b - a for a, b in zip(recent_perf[:-1], recent_perf[1:]))
+            
+            # 根据趋势调整策略网络
+            if trend < 0:  # 性能下降
+                # 增加探索性
+                for param_group in self.optimizer.param_groups:
+                    if 'strategy_net' in str(param_group['params'][0].shape):
+                        param_group['lr'] *= 1.2
+                
+                # 增加资源分配的灵活性
+                with torch.no_grad():
+                    for param in self.resource_net.parameters():
+                        if param.requires_grad:
+                            param.data *= 1.1
+                            
+            elif trend > 0:  # 性能提升
+                # 保持当前策略，但适当降低学习率以稳定表现
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] *= 0.98
+                    
+            else:  # 性能稳定
+                # 适当降低学习力度
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] *= 0.95
+                    
+        # 分析置信度
+        if len(self.confidence_history) >= 5:
+            recent_conf = torch.tensor(self.confidence_history[-5:])
+            conf_mean = torch.mean(recent_conf).item()
+            conf_std = torch.std(recent_conf).item()
+            
+            # 如果置信度波动较大，增加稳定性
+            if conf_std > 0.2:
+                current_config = self.config_manager.get_current_config()
+                for module in self.modules():
+                    if isinstance(module, nn.Dropout):
+                        module.p = min(module.p + 0.05, current_config.hidden_dropout + 0.1)
+            
+            # 根据平均置信度调整策略
+            if conf_mean < 0.3:  # 置信度持续较低
+                # 增强状态编码器的表达能力
+                with torch.no_grad():
+                    for param in self.state_encoder.parameters():
+                        if param.requires_grad:
+                            param.data *= 1.1
+                            
+                # 增加资源分配的确定性
+                with torch.no_grad():
+                    for param in self.resource_net.parameters():
+                        if param.requires_grad:
+                            param.data *= 0.9
+                            
+            elif conf_mean > 0.8:  # 置信度持续较高
+                # 尝试优化资源使用
+                with torch.no_grad():
+                    # 计算资源分配的熵
+                    resource_dist = torch.softmax(
+                        self.resource_net(torch.randn(1, self.config.hidden_size)),
+                        dim=-1
+                    )
+                    entropy = -torch.sum(resource_dist * torch.log(resource_dist + 1e-10))
+                    
+                    # 如果资源分配过于分散，增加集中度
+                    if entropy > 0.8:
+                        for param in self.resource_net.parameters():
+                            if param.requires_grad:
+                                param.data *= 0.95
+                                
+        # 优化策略生成
+        if len(self.performance_history) >= 5:
+            recent_perf = self.performance_history[-5:]
+            avg_perf = sum(recent_perf) / len(recent_perf)
+            
+            # 如果性能持续较低，增强策略网络的容量
+            if avg_perf < 0.3:
+                with torch.no_grad():
+                    # 增强策略网络中间层的表达能力
+                    for module in self.strategy_net:
+                        if isinstance(module, nn.Linear):
+                            # 增加权重范围
+                            module.weight.data *= 1.1
+                            if module.bias is not None:
+                                module.bias.data *= 1.1
+            
+            # 如果性能稳定在高水平，优化策略的效率
+            elif avg_perf > 0.8:
+                with torch.no_grad():
+                    # 计算策略网络参数的稀疏度
+                    total_params = 0
+                    small_params = 0
+                    for module in self.strategy_net:
+                        if isinstance(module, nn.Linear):
+                            total_params += module.weight.numel()
+                            small_params += torch.sum(torch.abs(module.weight) < 0.01).item()
+                    
+                    sparsity = small_params / total_params
+                    
+                    # 如果网络不够稀疏，增加L1正则化效果
+                    if sparsity < 0.3:
+                        for module in self.strategy_net:
+                            if isinstance(module, nn.Linear):
+                                module.weight.data *= torch.where(
+                                    torch.abs(module.weight.data) < 0.01,
+                                    torch.tensor(0.9),
+                                    torch.tensor(1.0)
+                                )
+        
+        # 清理历史记录（保留最近50条）
+        if len(self.performance_history) > 50:
+            self.performance_history = self.performance_history[-50:]
+        if len(self.confidence_history) > 50:
+            self.confidence_history = self.confidence_history[-50:]
 
 # TODO: 系统集成
 class ThinkingSystem:
@@ -1569,7 +2284,7 @@ class ThinkingSystem:
         )
         
         # 2. 分析反馈
-        analysis = self.feedback_system.analyze_feedback(system_feedback)
+        analysis = self.feedback_system.analyze_feedback()
         
         # 3. 调整系统参数
         self._adjust_system_parameters(analysis)
